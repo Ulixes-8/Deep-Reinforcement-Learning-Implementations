@@ -141,26 +141,18 @@ class ValueIteration(MDPSolver):
             policy[S, OTHER_ACTIONS] = 0
         """
         policy = np.zeros([self.state_dim, self.action_dim])
-        ### PUT YOUR CODE HERE ###
+        
         # For each state...
         for s in range(self.state_dim):
-            # Skip terminal states
-            if self.mdp.terminal_mask[s]:
-                # For terminal states, distribute probability equally (or set to 0)
-                policy[s, :] = 1.0 / self.action_dim
-                continue
-            
             # Calculate action values for this state
             action_values = np.zeros(self.action_dim)
             for a in range(self.action_dim):
-                # Only consider next states with non-zero transition probability
-                next_states = np.where(self.mdp.P[s, a] > 0)[0]
-                
                 # Calculate expected value for each action
-                for s_next in next_states:
+                for s_next in range(self.state_dim):
                     p = self.mdp.P[s, a, s_next]
-                    r = self.mdp.R[s, a, s_next]
-                    action_values[a] += p * (r + self.gamma * V[s_next])
+                    if p > 0:  # Only consider non-zero transitions
+                        r = self.mdp.R[s, a, s_next]
+                        action_values[a] += p * (r + self.gamma * V[s_next])
             
             # Find best action (argmax)
             best_action = np.argmax(action_values)
@@ -212,53 +204,55 @@ class PolicyIteration(MDPSolver):
             A 1D NumPy array that encodes the computed value function
             It is indexed as (State) where V[State] is the value of state 'State'
         """
-        # Initialize value function
         V = np.zeros(self.state_dim)
         
-        # Set a small threshold for convergence
-        theta = getattr(self, 'theta', 1e-6)  # Default to 1e-6 if self.theta is not set
-                
-        # Iterative policy evaluation
+        # Policy evaluation loop
         while True:
+            # Initialize delta for tracking the maximum change
             delta = 0
-            # For each state...
+            
+            # Loop through each state
             for s in range(self.state_dim):
-                # Skip terminal states (their value remains 0)
+                # Skip terminal states - their value remains 0
                 if self.mdp.terminal_mask[s]:
                     continue
                     
                 # Store old value for convergence check
                 v_old = V[s]
                 
-                # Initialize new value
-                v_new = 0
+                # Initialize new V(s) to zero before summation
+                new_value = 0
                 
-                # For each action with non-zero probability under the policy...
+                # For each action with non-zero probability under the policy
                 for a in range(self.action_dim):
                     if policy[s, a] > 0:
                         # Calculate expected value for this action
                         action_value = 0
-                        # Only consider next states with non-zero transition probability
-                        next_states = np.where(self.mdp.P[s, a] > 0)[0]
-                        for s_next in next_states:
-                            # Calculate transition dynamics component
-                            p = self.mdp.P[s, a, s_next]
-                            r = self.mdp.R[s, a, s_next]
-                            action_value += p * (r + self.gamma * V[s_next])
                         
-                    
-                # Update value function
-                V[s] = v_new
+                        # Sum over all possible next states
+                        for s_prime in range(self.state_dim):
+                            # Get transition probability and reward
+                            prob = self.mdp.P[s, a, s_prime]
+                            reward = self.mdp.R[s, a, s_prime]
+                            
+                            # Add to expected value: p(s',r|s,a) * [r + γV(s')]
+                            action_value += prob * (reward + self.gamma * V[s_prime])
+                        
+                        # Weight by the probability of taking this action under the policy
+                        new_value += policy[s, a] * action_value
                 
-                # Update maximum change for convergence check
-                delta = max(delta, abs(v_old - v_new))
+                # Update the value function
+                V[s] = new_value
+                
+                # Update delta for convergence check
+                delta = max(delta, abs(v_old - V[s]))
             
             # Check for convergence
-            if delta < theta:
+            if delta < self.theta:
                 break
-            
+        
+        return V
 
-        return np.array(V)
 
     def _policy_improvement(self) -> Tuple[np.ndarray, np.ndarray]:
         """Computes policy iteration until a stable policy is reached
@@ -279,50 +273,60 @@ class PolicyIteration(MDPSolver):
                        np.ndarray of float with dim (num of states)):
             Tuple of calculated policy and value function
         """
-        # Make uniform random? 
+    # Initialize policy arbitrarily
+        # policy = np.ones([self.state_dim, self.action_dim]) / self.action_dim
         policy = np.zeros([self.state_dim, self.action_dim])
-        V = np.zeros([self.state_dim])
-        ### PUT YOUR CODE HERE ###
-        policy_stable = False
-        while not policy_stable:
-                # 1. Policy Evaluation: compute value function for current policy
-                V = self._policy_eval(policy)
-                
-                # 2. Policy Improvement: update policy based on new value function
-                policy_stable = True
-                
-                # For each state...
-                for s in range(self.state_dim):
-                    # Skip terminal states
-                    if self.mdp.terminal_mask[s]:
-                        continue
-                        
-                    # Keep track of old action for stability check
-                    old_action = np.argmax(policy[s])
-                    
-                    # Compute new action values for all actions
-                    action_values = np.zeros(self.action_dim)
-                    for a in range(self.action_dim):
-                        # Only consider next states with non-zero transition probability
-                        next_states = np.where(self.mdp.P[s, a] > 0)[0]
-                        for s_next in next_states:
-                            p = self.mdp.P[s, a, s_next]
-                            r = self.mdp.R[s, a, s_next]
-                            action_values[a] += p * (r + self.gamma * V[s_next])
-                    
-                    # Find best action (greedy with respect to value function)
-                    best_action = np.argmax(action_values)
-                    
-                    # Update policy (deterministic policy)
-                    policy[s] = np.zeros(self.action_dim)
-                    policy[s, best_action] = 1.0
-                    
-                    # Check if policy has changed for this state
-                    if old_action != best_action:
-                        policy_stable = False
-            
-        return policy, V
 
+            # Set first action to 1.0 for each state to ensure a valid initial policy
+        for s in range(self.state_dim):
+            policy[s, 0] = 1.0
+
+        # Main policy iteration loop
+        while True:
+            # Step 1: Policy evaluation
+            V = self._policy_eval(policy)
+            
+            # Step 2: Policy improvement
+            policy_stable = True
+            
+            # For each state
+            for s in range(self.state_dim):
+                # Skip terminal states in improvement
+                if self.mdp.terminal_mask[s]:
+                    continue
+                    
+                # Store the old action
+                old_action = np.argmax(policy[s])
+                
+                # Calculate action values
+                action_values = np.zeros(self.action_dim)
+                for a in range(self.action_dim):
+                    for s_prime in range(self.state_dim):
+                        action_values[a] += self.mdp.P[s, a, s_prime] * (
+                            self.mdp.R[s, a, s_prime] + self.gamma * V[s_prime]
+                        )
+                
+                # Find the new best action
+                new_action = np.argmax(action_values)
+                
+                # Create deterministic policy
+                new_policy_for_state = np.zeros(self.action_dim)
+                new_policy_for_state[new_action] = 1.0
+                
+                # Check if policy has changed
+                if old_action != new_action:
+                    policy_stable = False
+                
+                # Update policy
+                policy[s] = new_policy_for_state
+            
+            # If policy is stable, we're done
+            if policy_stable:
+                # V = self._policy_eval(policy)
+                break
+        
+        return policy, V
+    
     def solve(self, theta: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
         """Solves the MDP
 
