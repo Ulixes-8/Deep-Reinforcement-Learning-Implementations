@@ -80,8 +80,47 @@ class ValueIteration(MDPSolver):
             E.g. V[3] returns the computed value for state 3
         """
         V = np.zeros(self.state_dim)
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q1")
+        # Main loop of value iteration
+        while True:
+            # Initialize delta for convergence check
+            delta = 0
+            
+            # Loop through all states
+            for s in range(self.state_dim):
+                # Skip terminal states (their value remains 0)
+                if self.mdp.terminal_mask[s]:
+                    continue
+                    
+                # Store old value for convergence check
+                v_old = V[s]
+                
+                # Initialize array to store action values
+                action_values = np.zeros(self.action_dim)
+                
+                # Calculate value for each action
+                for a in range(self.action_dim):
+                    # Only consider next states with non-zero transition probability
+                    next_states = np.where(self.mdp.P[s, a] > 0)[0]
+                    
+                    # Sum over all possible next states
+                    for s_next in next_states:
+                        # Get transition probability and reward
+                        p = self.mdp.P[s, a, s_next]
+                        r = self.mdp.R[s, a, s_next]
+                        
+                        # Add weighted value to action value
+                        action_values[a] += p * (r + self.gamma * V[s_next])
+                
+                # Update state value with maximum action value
+                V[s] = np.max(action_values)
+                
+                # Update delta for convergence check
+                delta = max(delta, abs(v_old - V[s]))
+            
+            # Check for convergence
+            if delta < theta:
+                break
+        
         return V
 
     def _calc_policy(self, V: np.ndarray) -> np.ndarray:
@@ -102,8 +141,25 @@ class ValueIteration(MDPSolver):
             policy[S, OTHER_ACTIONS] = 0
         """
         policy = np.zeros([self.state_dim, self.action_dim])
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q1")
+        
+        # For each state...
+        for s in range(self.state_dim):
+            # Calculate action values for this state
+            action_values = np.zeros(self.action_dim)
+            for a in range(self.action_dim):
+                # Calculate expected value for each action
+                for s_next in range(self.state_dim):
+                    p = self.mdp.P[s, a, s_next]
+                    if p > 0:  # Only consider non-zero transitions
+                        r = self.mdp.R[s, a, s_next]
+                        action_values[a] += p * (r + self.gamma * V[s_next])
+            
+            # Find best action (argmax)
+            best_action = np.argmax(action_values)
+            
+            # Set deterministic policy (probability 1.0 for best action)
+            policy[s, best_action] = 1.0
+        
         return policy
 
     def solve(self, theta: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
@@ -149,9 +205,54 @@ class PolicyIteration(MDPSolver):
             It is indexed as (State) where V[State] is the value of state 'State'
         """
         V = np.zeros(self.state_dim)
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q1")
-        return np.array(V)
+        
+        # Policy evaluation loop
+        while True:
+            # Initialize delta for tracking the maximum change
+            delta = 0
+            
+            # Loop through each state
+            for s in range(self.state_dim):
+                # Skip terminal states - their value remains 0
+                if self.mdp.terminal_mask[s]:
+                    continue
+                    
+                # Store old value for convergence check
+                v_old = V[s]
+                
+                # Initialize new V(s) to zero before summation
+                new_value = 0
+                
+                # For each action with non-zero probability under the policy
+                for a in range(self.action_dim):
+                    if policy[s, a] > 0:
+                        # Calculate expected value for this action
+                        action_value = 0
+                        
+                        # Sum over all possible next states
+                        for s_prime in range(self.state_dim):
+                            # Get transition probability and reward
+                            prob = self.mdp.P[s, a, s_prime]
+                            reward = self.mdp.R[s, a, s_prime]
+                            
+                            # Add to expected value: p(s',r|s,a) * [r + γV(s')]
+                            action_value += prob * (reward + self.gamma * V[s_prime])
+                        
+                        # Weight by the probability of taking this action under the policy
+                        new_value += policy[s, a] * action_value
+                
+                # Update the value function
+                V[s] = new_value
+                
+                # Update delta for convergence check
+                delta = max(delta, abs(v_old - V[s]))
+            
+            # Check for convergence
+            if delta < self.theta:
+                break
+        
+        return V
+
 
     def _policy_improvement(self) -> Tuple[np.ndarray, np.ndarray]:
         """Computes policy iteration until a stable policy is reached
@@ -172,12 +273,60 @@ class PolicyIteration(MDPSolver):
                        np.ndarray of float with dim (num of states)):
             Tuple of calculated policy and value function
         """
+    # Initialize policy arbitrarily
+        # policy = np.ones([self.state_dim, self.action_dim]) / self.action_dim
         policy = np.zeros([self.state_dim, self.action_dim])
-        V = np.zeros([self.state_dim])
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q1")
-        return policy, V
 
+            # Set first action to 1.0 for each state to ensure a valid initial policy
+        for s in range(self.state_dim):
+            policy[s, 0] = 1.0
+
+        # Main policy iteration loop
+        while True:
+            # Step 1: Policy evaluation
+            V = self._policy_eval(policy)
+            
+            # Step 2: Policy improvement
+            policy_stable = True
+            
+            # For each state
+            for s in range(self.state_dim):
+                # Skip terminal states in improvement
+                if self.mdp.terminal_mask[s]:
+                    continue
+                    
+                # Store the old action
+                old_action = np.argmax(policy[s])
+                
+                # Calculate action values
+                action_values = np.zeros(self.action_dim)
+                for a in range(self.action_dim):
+                    for s_prime in range(self.state_dim):
+                        action_values[a] += self.mdp.P[s, a, s_prime] * (
+                            self.mdp.R[s, a, s_prime] + self.gamma * V[s_prime]
+                        )
+                
+                # Find the new best action
+                new_action = np.argmax(action_values)
+                
+                # Create deterministic policy
+                new_policy_for_state = np.zeros(self.action_dim)
+                new_policy_for_state[new_action] = 1.0
+                
+                # Check if policy has changed
+                if old_action != new_action:
+                    policy_stable = False
+                
+                # Update policy
+                policy[s] = new_policy_for_state
+            
+            # If policy is stable, we're done
+            if policy_stable:
+                # V = self._policy_eval(policy)
+                break
+        
+        return policy, V
+    
     def solve(self, theta: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
         """Solves the MDP
 
