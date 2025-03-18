@@ -4,6 +4,7 @@ import random
 from typing import List, Dict, DefaultDict
 from gymnasium.spaces import Space
 from gymnasium.spaces.utils import flatdim
+import numpy as np
 
 
 class Agent(ABC):
@@ -53,11 +54,28 @@ class Agent(ABC):
         :param obs (int): received observation representing the current environmental state
         :return (int): index of selected action
         """
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q2")
-        ### RETURN AN ACTION HERE ###
-        return -1
-
+        # Generate a random number between 0 and 1
+        random_number = random.random()
+        
+        # Explore: with probability epsilon, choose a random action
+        if random_number < self.epsilon:
+            return random.randint(0, self.n_acts - 1)
+        
+        # Exploit: with probability (1-epsilon), choose the best action
+        else:
+            # Initialize best action and its value
+            best_action = 0
+            best_value = self.q_table[(obs, 0)]
+            
+            # Explicitly check each action to find the one with highest Q-value
+            for action in range(1, self.n_acts):
+                q_value = self.q_table[(obs, action)]
+                if q_value > best_value:
+                    best_value = q_value
+                    best_action = action
+                    
+            return best_action
+        
     @abstractmethod
     def schedule_hyperparameters(self, timestep: int, max_timestep: int):
         """Updates the hyperparameters
@@ -104,8 +122,24 @@ class QLearningAgent(Agent):
         :param done (bool): flag indicating whether a terminal state has been reached
         :return (float): updated Q-value for current observation-action pair
         """
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q2")
+        # Get current Q-value
+        current_q = self.q_table[(obs, action)]
+        
+        # Calculate the maximum Q-value for the next state
+        if done:
+            # If terminal state, there is no future reward
+            max_next_q = 0
+        else:
+            # Find maximum Q-value across all actions for next state
+            max_next_q = max(self.q_table[(n_obs, a)] for a in range(self.n_acts))
+        
+        # Calculate target Q-value using Bellman equation
+        target_q = reward + self.gamma * max_next_q
+        
+        # Update Q-value using learning rate alpha
+        self.q_table[(obs, action)] = current_q + self.alpha * (target_q - current_q)
+        
+        # Return the updated Q-value
         return self.q_table[(obs, action)]
 
     def schedule_hyperparameters(self, timestep: int, max_timestep: int):

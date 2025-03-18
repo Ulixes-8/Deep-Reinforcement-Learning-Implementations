@@ -68,24 +68,26 @@ def train(env, config):
     evaluation_return_means = []
     evaluation_negative_returns = []
 
+    # Loop for each episode
     for eps_num in tqdm(range(1, config["total_eps"]+1)):
-        obs, _ = env.reset()
+        obs, _ = env.reset() # Initialize S
         episodic_return = 0
         t = 0
 
+        # Loop for each step in episode
         while t < config["eps_max_steps"]:
             agent.schedule_hyperparameters(step_counter, max_steps)
-            act = agent.act(obs)
-            n_obs, reward, terminated, truncated, _ = env.step(act)
-            done = terminated or truncated
-            agent.learn(obs, act, reward, n_obs, done)
+            act = agent.act(obs) # Choose A from S using epsilon greedy policy ferived from Q
+            n_obs, reward, terminated, truncated, _ = env.step(act) # Take action A, observe (R, S')
+            done = terminated or truncated # If n_obs is terminal state
+            agent.learn(obs, act, reward, n_obs, done) # Q-learning update
 
             t += 1
             step_counter += 1
             episodic_return += reward
 
-            if done:
-                break
+            if done:  
+                break # Until S terminal.
 
             obs = n_obs
 
