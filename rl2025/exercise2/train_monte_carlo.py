@@ -66,6 +66,7 @@ def train(env, config):
     evaluation_return_means = []
     evaluation_negative_returns = []
 
+    # For each episode
     for eps_num in tqdm(range(1, config["total_eps"] + 1)):
         obs, _ = env.reset()
 
@@ -73,6 +74,8 @@ def train(env, config):
         episodic_return = 0
 
         obs_list, act_list, rew_list = [], [], []
+
+        # Generate an episode following the policy
         while t < config["eps_max_steps"]:
             agent.schedule_hyperparameters(step_counter, max_steps)
             act = agent.act(obs)
@@ -93,6 +96,7 @@ def train(env, config):
 
             obs = n_obs
 
+        # Learn from the episode
         agent.learn(obs_list, act_list, rew_list)
         total_reward += episodic_return
 

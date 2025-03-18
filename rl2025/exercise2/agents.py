@@ -187,8 +187,33 @@ class MonteCarloAgent(Agent):
             indexed by the state action pair.
         """
         updated_values = {}
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q2")
+        
+        # Calculate returns for each timestep
+        G = 0
+        # Process the episode in reverse order
+        for t in range(len(obses) - 1, -1, -1):
+            # Current state and action
+            state = obses[t]
+            action = actions[t]
+            
+            # Update return with reward from the next step
+            G = self.gamma * G + rewards[t]
+            
+            # For every-visit MC, we update Q-value on every visit
+            sa_pair = (state, action)
+            
+            # Update visit count
+            if sa_pair not in self.sa_counts:
+                self.sa_counts[sa_pair] = 0
+            self.sa_counts[sa_pair] += 1
+            
+            # Update Q-value with incremental mean
+            old_q = self.q_table[sa_pair]
+            self.q_table[sa_pair] = old_q + (1 / self.sa_counts[sa_pair]) * (G - old_q)
+            
+            # Store updated value
+            updated_values[sa_pair] = self.q_table[sa_pair]
+        
         return updated_values
 
     def schedule_hyperparameters(self, timestep: int, max_timestep: int):
