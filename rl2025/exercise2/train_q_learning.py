@@ -5,12 +5,22 @@ from rl2025.constants import EX2_QL_CONSTANTS as CONSTANTS
 from rl2025.exercise2.agents import QLearningAgent
 from rl2025.exercise2.utils import evaluate
 
+# Test 1
 CONFIG = {
     "eval_freq": 1000, # keep this unchanged
     "alpha": 0.05,
     "epsilon": 0.9,
     "gamma": 0.99,
 }
+
+# # Test 2
+# CONFIG = {
+#     "eval_freq": 1000, # keep this unchanged
+#     "alpha": 0.05,
+#     "epsilon": 0.9,
+#     "gamma": 0.8,
+# }
+
 CONFIG.update(CONSTANTS)
 
 
@@ -99,9 +109,16 @@ def train(env, config):
             evaluation_return_means.append(mean_return)
             evaluation_negative_returns.append(negative_returns)
 
+    # print("Q-values for terminal state:")
+    # for action in range(agent.n_acts):
+    #     q_val = agent.q_table[(n_obs, action)]
+    #     print(f"Action {action}: Q-value {q_val}")
+    
     return total_reward, evaluation_return_means, evaluation_negative_returns, agent.q_table
 
 
 if __name__ == "__main__":
     env = gym.make(CONFIG["env"])
+    # env = gym.make(CONFIG["env"], is_slippery=False)
     total_reward, _, _, q_table = train(env, CONFIG)
+    print(f"Configuration: {CONFIG}")
