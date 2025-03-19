@@ -119,3 +119,143 @@ def get_best_saved_run(runs:List[Run]) -> Tuple[Run, str]:
         return best_run, best_run.agent_weights_filenames[best_run_id]
     else:
         raise ValueError(f"No saved runs found for highest mean final returns run {best_run.run_name}.")
+    
+
+import gymnasium as gym
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+from rl2025.util.result_processing import Run, rank_runs
+from rl2025.exercise2.train_q_learning import train as train_q
+from rl2025.exercise2.train_monte_carlo import train as train_mc
+from rl2025.constants import EX2_QL_CONSTANTS, EX2_MC_CONSTANTS
+
+# Number of seeds to run
+n_seeds = 10
+
+# Create Run objects for each configuration
+ql_run1 = Run({"alpha": 0.05, "epsilon": 0.9, "gamma": 0.99, "save_filename": None})
+ql_run1.run_name = "QL (γ=0.99)"
+
+ql_run2 = Run({"alpha": 0.05, "epsilon": 0.9, "gamma": 0.8, "save_filename": None})
+ql_run2.run_name = "QL (γ=0.8)"
+
+mc_run1 = Run({"epsilon": 0.9, "gamma": 0.99, "save_filename": None})
+mc_run1.run_name = "MC (γ=0.99)"
+
+mc_run2 = Run({"epsilon": 0.9, "gamma": 0.8, "save_filename": None})
+mc_run2.run_name = "MC (γ=0.8)"
+
+# Run Q-Learning experiments
+for seed in range(n_seeds):
+    print(f"Q-Learning: Seed {seed+1}/{n_seeds}")
+    
+    # Set random seeds
+    # random.seed(seed)
+    # np.random.seed(seed)
+    
+    # Config 1 (gamma = 0.99)
+    ql_config1 = {
+        "eval_freq": 1000,
+        "alpha": 0.05,
+        "epsilon": 0.9,
+        "gamma": 0.99,
+    }
+    ql_config1.update(EX2_QL_CONSTANTS)
+    
+    env = gym.make(ql_config1["env"])
+    # env = gym.make(ql_config1["env"], is_slippery=False)
+    _, eval_returns, _, _ = train_q(env, ql_config1)
+    eval_timesteps = [ql_config1["eval_freq"] * (i+1) for i in range(len(eval_returns))]
+    ql_run1.update(eval_returns, eval_timesteps)
+    
+    # Config 2 (gamma = 0.8)
+    ql_config2 = {
+        "eval_freq": 1000,
+        "alpha": 0.05,
+        "epsilon": 0.9,
+        "gamma": 0.8,
+    }
+    ql_config2.update(EX2_QL_CONSTANTS)
+    
+    # env = gym.make(ql_config2["env"], is_slippery=False)
+    env = gym.make(ql_config2["env"])
+    _, eval_returns, _, _ = train_q(env, ql_config2)
+    eval_timesteps = [ql_config2["eval_freq"] * (i+1) for i in range(len(eval_returns))]
+    ql_run2.update(eval_returns, eval_timesteps)
+
+# Run Monte Carlo experiments
+for seed in range(n_seeds):
+    print(f"Monte Carlo: Seed {seed+1}/{n_seeds}")
+    
+    # Set random seeds
+    # random.seed(seed)
+    # np.random.seed(seed)
+    
+    # Config 1 (gamma = 0.99)
+    mc_config1 = {
+        "eval_freq": 5000,
+        "epsilon": 0.9,
+        "gamma": 0.99,
+    }
+    mc_config1.update(EX2_MC_CONSTANTS)
+    
+    # env = gym.make(mc_config1["env"], is_slippery=False)
+    env = gym.make(mc_config1["env"])
+    _, eval_returns, _, _ = train_mc(env, mc_config1)
+    eval_timesteps = [mc_config1["eval_freq"] * (i+1) for i in range(len(eval_returns))]
+    mc_run1.update(eval_returns, eval_timesteps)
+    
+    # Config 2 (gamma = 0.8)
+    mc_config2 = {
+        "eval_freq": 5000,
+        "epsilon": 0.9,
+        "gamma": 0.8,
+    }
+    mc_config2.update(EX2_MC_CONSTANTS)
+    
+    # env = gym.make(mc_config2["env"], is_slippery=False)
+    env = gym.make(mc_config2["env"])
+    _, eval_returns, _, _ = train_mc(env, mc_config2)
+    eval_timesteps = [mc_config2["eval_freq"] * (i+1) for i in range(len(eval_returns))]
+    mc_run2.update(eval_returns, eval_timesteps)
+
+# Analyze results
+all_runs = [ql_run1, ql_run2, mc_run1, mc_run2]
+
+# Print performance statistics
+print("\n=== Performance Statistics ===")
+for run in all_runs:
+    print(f"{run.run_name}:")
+    print(f"  Mean final return: {run.final_return_mean:.4f} ± {run.final_return_ste:.4f}")
+
+# Rank algorithms
+ranked_runs = rank_runs(all_runs)
+print("\n=== Algorithms Ranked by Final Return ===")
+for i, run in enumerate(ranked_runs):
+    print(f"{i+1}. {run.run_name}: {run.final_return_mean:.4f}")
+
+# Plot learning curves
+plt.figure(figsize=(10, 6))
+colors = ['blue', 'skyblue', 'red', 'salmon']
+
+for i, run in enumerate(all_runs):
+    timesteps = run.all_eval_timesteps[0]
+    returns_mean = np.mean(run.all_returns, axis=0)
+    returns_std = np.std(run.all_returns, axis=0)
+    
+    plt.plot(timesteps, returns_mean, color=colors[i], label=run.run_name)
+    plt.fill_between(
+        timesteps, 
+        returns_mean - returns_std, 
+        returns_mean + returns_std, 
+        color=colors[i], alpha=0.2
+    )
+
+plt.xlabel('Training Steps')
+plt.ylabel('Mean Return')
+plt.title('Learning Curves for Q-Learning and Monte Carlo')
+plt.legend()
+plt.grid(True)
+plt.savefig('rl_comparison.png')
+plt.show()

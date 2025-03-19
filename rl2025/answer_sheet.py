@@ -17,7 +17,7 @@ def question2_1() -> str:
     b) 0.8
     return: (str): your answer as a string. accepted strings: "a" or "b"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a" or "b"
+    answer = "a"  # TYPE YOUR ANSWER HERE "a" or "b"
     return answer
 
 
@@ -29,7 +29,7 @@ def question2_2() -> str:
     b) 0.8
     return: (str): your answer as a string. accepted strings: "a" or "b"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a" or "b"
+    answer = "a"  # TYPE YOUR ANSWER HERE "a" or "b"
     return answer
 
 
@@ -42,7 +42,7 @@ def question2_3() -> str:
     b) Every-Visit Monte Carlo
     return: (str): your answer as a string. accepted strings: "a" or "b"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a" or "b"
+    answer = "b"  # TYPE YOUR ANSWER HERE "a" or "b"
     return answer
 
 
@@ -53,7 +53,7 @@ def question2_4() -> str:
     by [Q-learning / Every-Visit Monte Carlo] when compared to the other algorithm.
     return: answer (str): your answer as a string (100 words max)
     """
-    answer = ""  # TYPE YOUR ANSWER HERE (100 words max)
+    answer = "The value of gamma affects Monte Carlo more significantly because it applies discount exponentially across entire episodes. In FrozenLake's sparse reward setting (single +1 reward at goal), a lower gamma (0.8) drastically diminishes distant rewards (to ~1.4% after 20 steps), essentially making goal rewards invisible from starting states. Q-Learning, conversely, propagates values incrementally through step-by-step Bellman updates, where gamma is applied only once per update. This allows reward information to gradually flow backward through states, making Q-Learning more robust to lower gamma values while still maintaining ability to learn appropriate long-term behaviors."  # TYPE YOUR ANSWER HERE (100 words max)
     return answer
 
 def question2_5() -> str:
