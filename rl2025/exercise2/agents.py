@@ -54,27 +54,15 @@ class Agent(ABC):
         :param obs (int): received observation representing the current environmental state
         :return (int): index of selected action
         """
-        # Generate a random number between 0 and 1
-        random_number = random.random()
+
+        if random.random() < self.epsilon:
+            return self.action_space.sample()
         
-        # Explore: with probability epsilon, choose a random action
-        if random_number < self.epsilon:
-            return random.randint(0, self.n_acts - 1)
-        
-        # Exploit: with probability (1-epsilon), choose the best action
         else:
-            # Initialize best action and its value
-            best_action = 0
-            best_value = self.q_table[(obs, 0)]
-            
-            # Explicitly check each action to find the one with highest Q-value
-            for action in range(1, self.n_acts):
-                q_value = self.q_table[(obs, action)]
-                if q_value > best_value:
-                    best_value = q_value
-                    best_action = action
-                    
-            return best_action
+            q_values = [self.q_table[(obs, a)] for a in range(self.n_acts)]
+            max_value = max(q_values)
+            max_indices = [i for i, v in enumerate(q_values) if v == max_value]
+            return random.choice(max_indices)
         
     @abstractmethod
     def schedule_hyperparameters(self, timestep: int, max_timestep: int):
