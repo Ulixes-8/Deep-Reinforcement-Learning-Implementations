@@ -5,18 +5,10 @@ from rl2025.exercise2.agents import MonteCarloAgent
 from rl2025.exercise2.utils import evaluate
 from tqdm import tqdm
 
-# # Test 1
-# CONFIG = {
-#     "eval_freq": 5000, # keep this unchanged
-#     "epsilon": 0.9,
-#     "gamma": 0.99,
-# }
-
-# Test 2
 CONFIG = {
     "eval_freq": 5000, # keep this unchanged
     "epsilon": 0.9,
-    "gamma": 0.8,
+    "gamma": 0.99,
 }
 
 CONFIG.update(CONSTANTS)

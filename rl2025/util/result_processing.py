@@ -146,6 +146,9 @@ mc_run1.run_name = "MC (γ=0.99)"
 mc_run2 = Run({"epsilon": 0.9, "gamma": 0.8, "save_filename": None})
 mc_run2.run_name = "MC (γ=0.8)"
 
+
+non_slippery = False
+
 # Run Q-Learning experiments
 for seed in range(n_seeds):
     print(f"Q-Learning: Seed {seed+1}/{n_seeds}")
@@ -163,8 +166,13 @@ for seed in range(n_seeds):
     }
     ql_config1.update(EX2_QL_CONSTANTS)
     
-    env = gym.make(ql_config1["env"])
-    # env = gym.make(ql_config1["env"], is_slippery=False)
+    if non_slippery:
+        env = gym.make(ql_config1["env"], is_slippery=False)
+        print("Non-slippery")
+    else: 
+        env = gym.make(ql_config1["env"])
+        print("Slippery")
+
     _, eval_returns, _, _ = train_q(env, ql_config1)
     eval_timesteps = [ql_config1["eval_freq"] * (i+1) for i in range(len(eval_returns))]
     ql_run1.update(eval_returns, eval_timesteps)
@@ -178,8 +186,11 @@ for seed in range(n_seeds):
     }
     ql_config2.update(EX2_QL_CONSTANTS)
     
-    # env = gym.make(ql_config2["env"], is_slippery=False)
-    env = gym.make(ql_config2["env"])
+    if non_slippery:
+        env = gym.make(ql_config2["env"], is_slippery=False)
+    else:
+        env = gym.make(ql_config2["env"])
+
     _, eval_returns, _, _ = train_q(env, ql_config2)
     eval_timesteps = [ql_config2["eval_freq"] * (i+1) for i in range(len(eval_returns))]
     ql_run2.update(eval_returns, eval_timesteps)
@@ -200,8 +211,13 @@ for seed in range(n_seeds):
     }
     mc_config1.update(EX2_MC_CONSTANTS)
     
-    # env = gym.make(mc_config1["env"], is_slippery=False)
-    env = gym.make(mc_config1["env"])
+    if non_slippery:
+        env = gym.make(mc_config1["env"], is_slippery=False)
+        print("Non-slippery")
+    else:
+        env = gym.make(mc_config1["env"])
+        print("Slippery")
+
     _, eval_returns, _, _ = train_mc(env, mc_config1)
     eval_timesteps = [mc_config1["eval_freq"] * (i+1) for i in range(len(eval_returns))]
     mc_run1.update(eval_returns, eval_timesteps)
@@ -214,8 +230,11 @@ for seed in range(n_seeds):
     }
     mc_config2.update(EX2_MC_CONSTANTS)
     
-    # env = gym.make(mc_config2["env"], is_slippery=False)
-    env = gym.make(mc_config2["env"])
+    if non_slippery:
+        env = gym.make(mc_config2["env"], is_slippery=False)
+    else:
+        env = gym.make(mc_config2["env"])
+
     _, eval_returns, _, _ = train_mc(env, mc_config2)
     eval_timesteps = [mc_config2["eval_freq"] * (i+1) for i in range(len(eval_returns))]
     mc_run2.update(eval_returns, eval_timesteps)
