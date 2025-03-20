@@ -17,7 +17,7 @@ def question2_1() -> str:
     b) 0.8
     return: (str): your answer as a string. accepted strings: "a" or "b"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a" or "b"
+    answer = "a"  # TYPE YOUR ANSWER HERE "a" or "b"
     return answer
 
 
@@ -29,7 +29,7 @@ def question2_2() -> str:
     b) 0.8
     return: (str): your answer as a string. accepted strings: "a" or "b"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a" or "b"
+    answer = "a"  # TYPE YOUR ANSWER HERE "a" or "b"
     return answer
 
 
@@ -42,7 +42,7 @@ def question2_3() -> str:
     b) Every-Visit Monte Carlo
     return: (str): your answer as a string. accepted strings: "a" or "b"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a" or "b"
+    answer = "b"  # TYPE YOUR ANSWER HERE "a" or "b"
     return answer
 
 
@@ -53,7 +53,9 @@ def question2_4() -> str:
     by [Q-learning / Every-Visit Monte Carlo] when compared to the other algorithm.
     return: answer (str): your answer as a string (100 words max)
     """
-    answer = ""  # TYPE YOUR ANSWER HERE (100 words max)
+    answer = "Gamma affects MC more significantly because it explicitly sums discounted rewards across entire episodes, which can be very long. In sparse reward environments (like FrozenLake) with γ=0.8, the single reward from transitioning to the terminal state becomes negligible for long episodes (e.g., 0.8^200), drastically reducing early state-action value updates. However, Q-learning updates incrementally via bootstrapping, propagating reward information backward efficiently without explicitly summing long-term returns. Thus, Q-learning is less sensitive to gamma, as distant rewards influence estimates through shorter incremental steps rather than through entire episode returns over many discounted timesteps. However, they are both still tremendously affected by gamma." # TYPE YOUR ANSWER HERE (100 words max)
+
+
     return answer
 
 def question2_5() -> str:
@@ -63,7 +65,7 @@ def question2_5() -> str:
     by [Q-learning / Every-Visit Monte Carlo].
     return: answer (str): your answer as a string (100 words max)
     """
-    answer = ""  # TYPE YOUR ANSWER HERE (100 words max)
+    answer = "In the non-slippery variant, actions produce deterministic outcomes, allowing stable convergence—Monte Carlo (~15,000 episodes) and Q-learning (~2,000 episodes) quickly reach optimal returns with zero variance. The slippery variant introduces stochastic transitions (2/3 unintended), significantly complicating value estimation. The resulting uncertainty causes returns to fluctuate, deflating state-action value estimates, increasing variance and slowing convergence. Lower gamma values (e.g., 0.8) further amplify this effect, heavily discounting the single delayed reward signal, thus deflating early state-action values further. Consequently, mean returns fluctuate more, final returns are lower, and convergence is slower compared to the deterministic scenario."   # TYPE YOUR ANSWER HERE (100 words max)
     return answer
 
 

@@ -10,6 +10,7 @@ CONFIG = {
     "epsilon": 0.9,
     "gamma": 0.99,
 }
+
 CONFIG.update(CONSTANTS)
 
 
@@ -66,6 +67,7 @@ def train(env, config):
     evaluation_return_means = []
     evaluation_negative_returns = []
 
+    # For each episode
     for eps_num in tqdm(range(1, config["total_eps"] + 1)):
         obs, _ = env.reset()
 
@@ -73,6 +75,8 @@ def train(env, config):
         episodic_return = 0
 
         obs_list, act_list, rew_list = [], [], []
+
+        # Generate an episode following the policy
         while t < config["eps_max_steps"]:
             agent.schedule_hyperparameters(step_counter, max_steps)
             act = agent.act(obs)
@@ -93,6 +97,7 @@ def train(env, config):
 
             obs = n_obs
 
+        # Learn from the episode
         agent.learn(obs_list, act_list, rew_list)
         total_reward += episodic_return
 
@@ -102,9 +107,16 @@ def train(env, config):
             evaluation_return_means.append(mean_return)
             evaluation_negative_returns.append(negative_returns)
 
+    # print("Q-values for terminal state:")
+    # for action in range(agent.n_acts):
+    #     q_val = agent.q_table[(n_obs, action)]
+    #     print(f"Action {action}: Q-value {q_val}")
+
     return total_reward, evaluation_return_means, evaluation_negative_returns, agent.q_table
 
 
 if __name__ == "__main__":
     env = gym.make(CONFIG["env"])
+    # env = gym.make(CONFIG["env"], is_slippery=False)
     total_reward, _, _, q_table = train(env, CONFIG)
+    print(f"Configuration: {CONFIG}")
