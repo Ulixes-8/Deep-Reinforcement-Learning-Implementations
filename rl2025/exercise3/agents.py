@@ -210,16 +210,33 @@ class DQN(Agent):
             
             Linearly decays epsilon from epsilon_start to epsilon_min based on the exploration_fraction
             """
-            ### PUT YOUR CODE HERE ###
-            return # current epsilon
-
-        def epsilon_exponential_decay(timestep, epsilon_start, epsilon_min, decay_factor):
-            """Exponential epsilon decay strategy
+            # Calculate the number of steps over which to decay epsilon
+            decay_steps = max_timestep * exploration_fraction
             
-            Exponentially decays epsilon from epsilon_start to epsilon_min using decay_factor
-            """
-            ### PUT YOUR CODE HERE ###
-            return # current epsilon
+            # If we're past the decay steps, return the minimum epsilon
+            if timestep >= decay_steps:
+                return epsilon_min
+            
+            # Otherwise, calculate the linearly decayed epsilon
+            epsilon = epsilon_start - (epsilon_start - epsilon_min) * (timestep / decay_steps)
+            return epsilon
+        
+        def epsilon_exponential_decay(timestep, max_timestep, epsilon_start, epsilon_min, decay_factor):
+            # Closed-form solution to recurrance relation for exponential decay
+            exponent = timestep * (timestep - 1) / (2 * max_timestep)
+            epsilon = epsilon_start * (decay_factor ** exponent)
+            return max(epsilon, epsilon_min)
+
+        # def epsilon_exponential_decay(timestep, max_timestep, epsilon_start, epsilon_min, decay_factor):
+        #     """Exponential epsilon decay strategy
+            
+        #     Exponentially decays epsilon from epsilon_start to epsilon_min using decay_factor
+        #     """
+        #     # Apply exponential decay using the formula r^(t/t_max)
+        #     epsilon = epsilon_start * (decay_factor ** (timestep/max_timestep))
+            
+        #     # Ensure epsilon doesn't fall below epsilon_min
+        #     return max(epsilon, epsilon_min)
 
         if self.epsilon_decay_strategy == "constant":
             pass
@@ -236,6 +253,7 @@ class DQN(Agent):
             # exponential decay
             self.epsilon = epsilon_exponential_decay(
                 timestep, 
+                max_timestep,
                 self.epsilon_start, 
                 self.epsilon_min, 
                 self.epsilon_exponential_decay_factor
@@ -257,8 +275,26 @@ class DQN(Agent):
         :return (sample from self.action_space): action the agent should perform
         """
 
-        ### PUT YOUR CODE HERE ###
-            
+        # Convert observation to PyTorch tensor
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+        
+        # Get Q-values for all actions for the current state
+        with torch.no_grad():
+            q_values = self.critics_net(obs_tensor)
+        
+        # Choose action based on epsilon-greedy policy
+        if explore and np.random.random() < self.epsilon:
+            # Random action (exploration)
+            action = self.action_space.sample()
+        else:
+            # Greedy action (exploitation)
+            # Convert Q-values to numpy for easier handling of tie-breaking
+            q_np = q_values.cpu().numpy().flatten()
+            # Find indices of actions with the maximum Q-value
+            max_indices = np.where(q_np == q_np.max())[0]
+            # Randomly select among actions with the maximum Q-value
+            action = np.random.choice(max_indices)
+        
         return action
 
     def update(self, batch: Transition) -> Dict[str, float]:
@@ -279,29 +315,33 @@ class DQN(Agent):
         # Convert actions to long tensor for gathering
         actions = actions.long()
         
-        # Calculate current Q-values
-         ### PUT YOUR CODE HERE ###
-
+        # Calculate current Q-values for the actions that were taken
+        current_q_values = self.critics_net(states)
+        current_q_values = current_q_values.gather(1, actions)
+        
         # Calculate target Q-values
-        # with torch.no_grad():
+        with torch.no_grad():
             # Get max Q-value for next state from target network
-            ### PUT YOUR CODE HERE ### 
+            next_q_values = self.critics_target(next_states).max(1, keepdim=True)[0]
+            
             # Calculate target Q-value using Bellman equation
-            ### PUT YOUR CODE HERE ###
+            # reward + gamma * max_a Q(s', a) if not done, else just reward
+            target_q_values = rewards + (1 - dones) * self.gamma * next_q_values
         
         # Calculate loss (Mean Squared Error)
-        ### PUT YOUR CODE HERE ###
+        q_loss = torch.nn.functional.mse_loss(current_q_values, target_q_values)
         
         # Optimize the critic network
-        ### PUT YOUR CODE HERE ###
+        self.critics_optim.zero_grad()
+        q_loss.backward()
+        self.critics_optim.step()
         
         # Update target network if it's time
         self.update_counter += 1
-        # if self.update_counter % self.target_update_freq == 0:
-
-            ### PUT YOUR CODE HERE ###
+        if self.update_counter % self.target_update_freq == 0:
+            self.critics_target.hard_update(self.critics_net)
         
-        return {"q_loss": q_loss.item()} # item() turns a one-element tensor into a standard python number
+        return {"q_loss": q_loss.item()}
 
 
 class DiscreteRL(Agent):
@@ -350,6 +390,7 @@ class DiscreteRL(Agent):
         # This avoids having to initialize all possible state-action pairs explicitly
         self.q_table: DefaultDict = defaultdict(lambda: 0)
 
+        k = 8  # Number of bins for discretization
         # For mountain car environment discretization - creates k bins for each dimension, e.g. k=8
         # Position range: -1.2 to 0.6 (8 bins)
         self.position_bins = np.linspace(-1.2, 0.6, k)
@@ -416,15 +457,29 @@ class DiscreteRL(Agent):
         :return (float): updated Q-value for current observation-action pair
         """
 
-
         # Convert continuous observations to discrete state identifiers
-        state = self.discretize_state(obs)         # Current state
-        next_state = self.discretize_state(n_obs)   # Next state
-
-        ### PUT YOUR CODE HERE ###
-
-        return {f"Q_value_{state}" : self.q_table[(state, action)]}
-
+        state = self.discretize_state(obs)        # Current state
+        next_state = self.discretize_state(n_obs) # Next state
+        
+        # Get current Q-value
+        current_q = self.q_table[(state, action)]
+        
+        # Calculate the maximum Q-value for the next state
+        if done:
+            # If terminal state, there is no future reward
+            max_next_q = 0
+        else:
+            # Find maximum Q-value across all actions for next state
+            max_next_q = max(self.q_table[(next_state, a)] for a in range(self.n_acts))
+        
+        # Calculate target Q-value using Bellman equation
+        target_q = reward + self.gamma * max_next_q
+        
+        # Update Q-value using learning rate alpha
+        self.q_table[(state, action)] = current_q + self.alpha * (target_q - current_q)
+        
+        # Return the updated Q-value in a dictionary
+        return {f"Q_value_{state}": self.q_table[(state, action)]}
 
     def schedule_hyperparameters(self, timestep: int, max_timestep: int):
         """Updates the hyperparameters (specifically epsilon for exploration).
