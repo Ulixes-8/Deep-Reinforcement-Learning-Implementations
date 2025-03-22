@@ -17,11 +17,13 @@ from rl2025.util.hparam_sweeping import generate_hparam_configs
 from rl2025.util.result_processing import Run
 
 RENDER = False # FALSE FOR FASTER TRAINING / TRUE TO VISUALIZE ENVIRONMENT DURING EVALUATION
+# RENDER = True # FALSE FOR FASTER TRAINING / TRUE TO VISUALIZE ENVIRONMENT DURING EVALUATION
 SWEEP = False # TRUE TO SWEEP OVER POSSIBLE HYPERPARAMETER CONFIGURATIONS
 NUM_SEEDS_SWEEP = 10 # NUMBER OF SEEDS TO USE FOR EACH HYPERPARAMETER CONFIGURATION
 SWEEP_SAVE_RESULTS = True # TRUE TO SAVE SWEEP RESULTS TO A FILE
 SWEEP_SAVE_ALL_WEIGHTS = False # TRUE TO SAVE ALL WEIGHTS FROM EACH SEED
 ENV = "MOUNTAINCAR" # "CARTPOLE" is also possible if you uncomment the corresponding code, but is not assessed for DQN.
+# ENV = "CARTPOLE"
 
 
 ### ASSIGNMENT: CHANGE epsilon_decay_strategy: "constant" TO "linear" OR "exponential" TO ANSWER QUESTIONS 3.2 TO 3.6 IN answer_sheet.py ###
@@ -99,10 +101,13 @@ def play_episode(
     episode_return = 0
 
     while not done:
+        # With probability epsilon, select a random action
         action = agent.act(obs, explore=explore)
+        # Execute action, observe reward and new state
         nobs, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
         if train:
+            # Store transition in replay buffer
             replay_buffer.push(
                 np.array(obs, dtype=np.float32),
                 np.array([action], dtype=np.float32),
@@ -110,6 +115,7 @@ def play_episode(
                 np.array([reward], dtype=np.float32),
                 np.array([done], dtype=np.float32),
             )
+            # When buffer is large enough, sample a batch and update the agent
             if len(replay_buffer) >= batch_size:
                 batch = replay_buffer.sample(batch_size)
                 new_data = agent.update(batch)
@@ -119,6 +125,7 @@ def play_episode(
         episode_timesteps += 1
         episode_return += reward
 
+        # If we reach the maximum number of steps, stop the episode
         if max_steps == episode_timesteps:
             break
         obs = nobs
@@ -174,7 +181,7 @@ def train(env: gym.Env, config, output: bool = True) -> Tuple[np.ndarray, np.nda
 
             if timesteps_elapsed % config["eval_freq"] < episode_timesteps:
                 eval_returns = 0
-                if config["env"] == "CartPole-v0" or config["env"] == "MountainCar-v0":
+                if config["env"] == "CartPole-v1" or config["env"] == "MountainCar-v0":
                     max_steps = config["episode_length"]
                 else:
                     raise ValueError(f"Unknown environment {config['env']}")

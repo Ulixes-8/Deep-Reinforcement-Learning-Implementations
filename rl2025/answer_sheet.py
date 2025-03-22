@@ -82,7 +82,7 @@ def question3_1() -> str:
     c) 2e-4
     return: (str): your answer as a string. accepted strings: "a", "b" or "c"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a", "b" or "c"
+    answer = "a"  # TYPE YOUR ANSWER HERE "a", "b" or "c"
     return answer
 
 
@@ -96,7 +96,7 @@ def question3_2() -> str:
     c) 0.01
     return: (str): your answer as a string. accepted strings: "a", "b" or "c"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a", "b" or "c"
+    answer = "c"  # TYPE YOUR ANSWER HERE "a", "b" or "c"
     return answer
 
 
@@ -110,7 +110,7 @@ def question3_3() -> str:
     c) 1e-5
     return: (str): your answer as a string. accepted strings: "a", "b" or "c"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a", "b" or "c"
+    answer = "b"  # TYPE YOUR ANSWER HERE "a", "b" or "c"
     return answer
 
 
@@ -126,7 +126,7 @@ def question3_4() -> str:
     e) it depends on the number of training timesteps
     return: (str): your answer as a string. accepted strings: "a", "b", "c", "d" or "e"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a", "b", "c", "d" or "e"
+    answer = "b"  # TYPE YOUR ANSWER HERE "a", "b", "c", "d" or "e"
     return answer
 
 
@@ -142,7 +142,7 @@ def question3_5() -> str:
     e) it depends on the number of training timesteps
     return: (str): your answer as a string. accepted strings: "a", "b", "c", "d" or "e"
     """
-    answer = ""  # TYPE YOUR ANSWER HERE "a", "b", "c", "d" or "e"
+    answer = "e"  # TYPE YOUR ANSWER HERE "a", "b", "c", "d" or "e"
     return answer
 
 
@@ -155,7 +155,7 @@ def question3_6() -> str:
     strategy you implemented).
     return: answer (str): your answer as a string (100 words max)
     """
-    answer = ""  # TYPE YOUR ANSWER HERE (100 words max)
+    answer = "A decay strategy based on exploration fraction is more generally applicable because it directly links exploration to the proportional progress of training rather than absolute timesteps. When you specify 'explore fully for the first 10 percent of training', this scales automatically to any environment regardless of episode length or training duration. In contrast, exponential decay requires careful tuning of the decay parameter for each environment's specific timestep scale. This means exploration fraction parameters transfer more easily between tasks with different time horizons, making them more intuitive and requiring less hyperparameter adjustment when changing environments."  # TYPE YOUR ANSWER HERE (100 words max)
     return answer
 
 
@@ -166,7 +166,7 @@ def question3_7() -> str:
     (where we usually see a fairly steady decrease of the loss throughout training)
     return: answer (str): your answer as a string (150 words max)
     """
-    answer = ""  # TYPE YOUR ANSWER HERE (150 words max)
+    answer = "In DQN, the loss does not steadily decrease because the targets depend on a periodically updated target network, creating a 'moving target' problem. Unlike supervised learning with fixed labels, DQN's Q-targets (R + γ·max Q_target) shift as the target network parameters change. This dynamic loss surface prevents stable convergence. And, because we are not simply converging on a fixed dataset, as exploration proceeds, the agent may visit new states where the Q-values are poorly estimated, causing spikes or increases in the loss. Additionally, policy improvement alters the data distribution in the replay buffer (non-stationarity), disrupting learning. Loss may increase when target updates introduce abrupt changes to Q-value estimates, forcing the network to adapt to new targets. Temporal difference errors spike until the critic network adjusts, preventing monotonic loss reduction. This moving target scenario, coupled with changing experience distributions, prevents a stable, consistent decrease in loss throughout training."  # TYPE YOUR ANSWER HERE (150 words max)
     return answer
 
 
@@ -177,7 +177,7 @@ def question3_8() -> str:
     the DQN training process.
     return: answer (str): your answer as a string (100 words max)
     """
-    answer = ""  # TYPE YOUR ANSWER HERE (100 words max)
+    answer = "The spikes occurring at regular intervals throughout DQN training correspond precisely to the moments when the target network parameters are updated (every 2000 steps in this case). When this hard update occurs, the target values for the Bellman equation suddenly shift, creating an immediate discrepancy between the Q-network's predictions and the new targets. This abrupt change in the loss landscape causes the characteristic spike pattern. After each spike, the loss gradually decreases as the Q-network adapts to the new target values, only to spike again at the next target network update, creating the sawtooth pattern visible in the graph."  # TYPE YOUR ANSWER HERE (100 words max)
     return answer
 
 
@@ -194,3 +194,5 @@ def question5_1() -> str:
     """
     answer = ""  # TYPE YOUR ANSWER HERE (200 words max)
     return answer
+
+print(question3_7())
