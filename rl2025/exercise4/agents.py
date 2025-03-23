@@ -178,8 +178,26 @@ class DDPG(Agent):
         :param explore (bool): flag indicating whether we should explore
         :return (sample from self.action_space): action the agent should perform
         """
-        ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q4")
+        # Convert observation to PyTorch tensor
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+        
+        # Get deterministic action from actor network
+        with torch.no_grad():
+            action = self.actor(obs_tensor)
+        
+        # Convert action tensor to numpy array
+        action = action.cpu().numpy().flatten()
+        
+        # Add noise for exploration if explore flag is True
+        if explore:
+            # Sample noise from the noise distribution
+            noise = self.noise.sample().numpy()
+            action = action + noise
+        
+        # Clip the action values to be within action space bounds
+        action = np.clip(action, self.lower_action_bound, self.upper_action_bound)
+        
+        return action
 
     def update(self, batch: Transition) -> Dict[str, float]:
         """Update function for DQN
@@ -194,11 +212,69 @@ class DDPG(Agent):
         :return (Dict[str, float]): dictionary mapping from loss names to loss values
         """
         ### PUT YOUR CODE HERE ###
-        raise NotImplementedError("Needed for Q4")
-
-        q_loss = 0.0
-        p_loss = 0.0
+        # Unpack the batch
+        states, actions, next_states, rewards, dones = batch
+        
+        # ---------------------- #
+        # UPDATE THE CRITIC      #
+        # ---------------------- #
+        
+        # Zero gradients
+        self.critic_optim.zero_grad()
+        
+        # Compute current Q-values
+        # Concatenate states and actions as input to critic
+        state_action = torch.cat([states, actions], dim=1)
+        current_q = self.critic(state_action)
+        
+        # Compute target Q-values
+        with torch.no_grad():
+            # Get next actions from target actor
+            next_actions = self.actor_target(next_states)
+            # Concatenate next states and next actions
+            next_state_action = torch.cat([next_states, next_actions], dim=1)
+            # Compute Q-values for next state-action pairs using target critic
+            next_q = self.critic_target(next_state_action)
+            # Calculate target Q-value using Bellman equation
+            target_q = rewards + (1 - dones) * self.gamma * next_q
+        
+        # Compute critic loss (MSE)
+        q_loss = F.mse_loss(current_q, target_q)
+        
+        # Update critic
+        q_loss.backward()
+        self.critic_optim.step()
+        
+        # ---------------------- #
+        # UPDATE THE ACTOR       #
+        # ---------------------- #
+        
+        # Zero gradients (important to zero grad here since critic gradients have been updated)
+        self.policy_optim.zero_grad()
+        
+        # Get current policy's actions
+        current_actions = self.actor(states)
+        
+        # Concatenate states and policy's actions
+        state_action = torch.cat([states, current_actions], dim=1)
+        
+        # Compute policy loss (negative of Q values)
+        # Note: The negative sign is because we want to maximize Q, but optimizers minimize the loss
+        p_loss = -self.critic(state_action).mean()
+        
+        # Update actor
+        p_loss.backward()
+        self.policy_optim.step()
+        
+        # ---------------------- #
+        # UPDATE TARGET NETWORKS #
+        # ---------------------- #
+        
+        # Soft update of target networks
+        self.critic_target.soft_update(self.critic, self.tau)
+        self.actor_target.soft_update(self.actor, self.tau)
+        
         return {
-            "q_loss": q_loss,
-            "p_loss": p_loss,
+            "q_loss": q_loss.item(),
+            "p_loss": p_loss.item(),
         }
