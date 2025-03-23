@@ -33,8 +33,8 @@ RACETRACK_CONFIG.update(RACETRACK_CONSTANTS)
 
 ### INCLUDE YOUR CHOICE OF HYPERPARAMETERS HERE ###
 RACETRACK_HPARAMS = {
-    "critic_hidden_size": ...,
-    "policy_hidden_size": ...,
+    "critic_hidden_size": [32, 32, 32],
+    "policy_hidden_size": [32, 32, 32],
     }
 
 SWEEP_RESULTS_FILE_RACETRACK = "DDPG-Racetrack-sweep-results-ex4.pkl"
