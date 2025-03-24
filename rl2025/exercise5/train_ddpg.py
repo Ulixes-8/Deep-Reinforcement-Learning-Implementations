@@ -193,9 +193,8 @@ class DiagGaussian:
         eps = torch.randn(*self.mean.size())
         return self.mean + self.std * eps
 
-# ViT-DDPG Agent class
 class DDPG_ViT(DDPG):
-    """DDPG with Vision Transformer for image observation processing"""
+    """DDPG with Vision Transformer for enhanced state representation"""
     
     def __init__(
             self,
@@ -214,50 +213,31 @@ class DDPG_ViT(DDPG):
             **kwargs,
     ):
         # Initialize parent class but we'll override networks
-        super().__init__(
-            action_space, observation_space, gamma, 
-            critic_learning_rate, policy_learning_rate,
-            critic_hidden_size, policy_hidden_size, tau, **kwargs
-        )
+        super(DDPG, self).__init__(action_space, observation_space)
+        
+        # Store hyperparameters for potential dynamic adjustments
+        self.vit_output_dim = vit_output_dim
+        self.critic_learning_rate = critic_learning_rate
+        self.policy_learning_rate = policy_learning_rate
         
         # Get dimensions
+        STATE_SIZE = observation_space.shape[0]
         ACTION_SIZE = action_space.shape[0]
         
-        # Get observation dimensions
-        if isinstance(observation_space, gym.spaces.Box):
-            if len(observation_space.shape) == 3:  # Image: (H, W, C)
-                IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS = observation_space.shape
-            elif len(observation_space.shape) == 1:  # Flattened
-                # For the racetrack environment, let's use observation shape directly
-                obs_dim = observation_space.shape[0]
-                
-                # Create a vector-based transformer instead
-                IMG_HEIGHT = 1  # Treat as a single-pixel height
-                IMG_WIDTH = obs_dim  # Width = observation dimension
-                IMG_CHANNELS = 1  # Single channel
-                
-                print(f"Treating flat observation as 1x{obs_dim}x1 'image'")
-            else:
-                raise ValueError(f"Unsupported observation shape: {observation_space.shape}")
-        else:
-            raise ValueError(f"Unsupported observation space type: {type(observation_space)}")
+        self.upper_action_bound = action_space.high[0]
+        self.lower_action_bound = action_space.low[0]
         
-        self.IMG_HEIGHT = IMG_HEIGHT
-        self.IMG_WIDTH = IMG_WIDTH
-        self.IMG_CHANNELS = IMG_CHANNELS
+        # print(f"State size from space: {STATE_SIZE}, Action size: {ACTION_SIZE}")
         
-        # Create vision transformer for state encoding
-        self.state_encoder = ViT_Base(
-            image_size=max(IMG_HEIGHT, IMG_WIDTH),
-            patch_size=2,  # Small patch size for vector observations
-            in_channels=IMG_CHANNELS,
-            embed_dim=vit_embed_dim,
-            depth=vit_depth,
-            num_heads=vit_heads,
-            output_dim=vit_output_dim
+        # We'll initialize the state encoder in _encode_state when we see the actual observation
+        self._encoder_initialized = False
+        
+        # Create a dummy encoder initially - will be replaced with the correct one
+        self.state_encoder = nn.Sequential(
+            nn.Linear(1, 1)  # Placeholder
         )
         
-        # Create actor network (policy)
+        # Create actor network (policy) 
         self.actor = FCNetwork(
             (vit_output_dim, *policy_hidden_size, ACTION_SIZE), 
             output_activation=torch.nn.Tanh
@@ -283,19 +263,20 @@ class DDPG_ViT(DDPG):
         )
         self.critic_target.hard_update(self.critic)
         
-        # Create optimizers
-        self.state_encoder_optim = torch.optim.Adam(
-            self.state_encoder.parameters(), 
-            lr=critic_learning_rate, 
-            eps=1e-3
-        )
+        # Store parameters
+        self.gamma = gamma
+        self.tau = tau
+        
+        # Create optimizers - these will be updated when we know the actual encoder
         self.policy_optim = torch.optim.Adam(
             self.actor.parameters(), 
             lr=policy_learning_rate, 
             eps=1e-3
         )
+        
+        # Initially create the critic optimizer without the encoder parameters
         self.critic_optim = torch.optim.Adam(
-            list(self.critic.parameters()) + list(self.state_encoder.parameters()),
+            self.critic.parameters(),
             lr=critic_learning_rate, 
             eps=1e-3
         )
@@ -304,46 +285,131 @@ class DDPG_ViT(DDPG):
         self.noise = DiagGaussian(torch.zeros(ACTION_SIZE), 0.1 * torch.ones(ACTION_SIZE))
         
         # Update saveables
-        self.saveables.update({
-            "state_encoder": self.state_encoder,
+        self.saveables = {
             "actor": self.actor,
             "actor_target": self.actor_target,
             "critic": self.critic,
             "critic_target": self.critic_target,
-            "state_encoder_optim": self.state_encoder_optim,
             "policy_optim": self.policy_optim,
             "critic_optim": self.critic_optim,
-        })
-    
+        }
+
     def _encode_state(self, state):
-        """Encode state using vision transformer"""
+        """Encode state using a transformer-based representation enhancer"""
         # Convert to tensor if needed
         if isinstance(state, np.ndarray):
             state = torch.FloatTensor(state)
         
-        # Reshape based on dimensionality
-        if len(state.shape) == 1:  # Vector observation
-            # Reshape to 1 x width x 1 "image"
-            state = state.reshape(1, 1, self.IMG_WIDTH, 1).permute(0, 3, 1, 2)  # (B, C, H, W)
-        elif len(state.shape) == 3:  # (H, W, C)
-            state = state.permute(2, 0, 1).unsqueeze(0)  # (1, C, H, W)
-        elif len(state.shape) == 4:  # (B, H, W, C)
-            state = state.permute(0, 3, 1, 2)  # (B, C, H, W)
+        # Handle the actual dimension we're receiving
+        if len(state.shape) == 1:
+            actual_size = state.shape[0]
+            
+            # Initialize or recreate encoder if needed
+            if not hasattr(self, '_actual_state_size') or self._actual_state_size != actual_size:
+                print(f"Creating new transformer encoder for state size {actual_size}")
+                self._actual_state_size = actual_size
+                
+                # Create a sequence transformer encoder that can better capture relationships
+                # between different elements of the state vector
+                
+                # Each element of the state vector will be treated as a token
+                # with its own embedding
+                token_embedding_dim = 32  # Embedding dimension for each state element
+                
+                # Create the token embedding layer
+                token_embedding = nn.Linear(1, token_embedding_dim)
+                
+                # Position encoding
+                positional_embedding = nn.Parameter(torch.zeros(1, actual_size, token_embedding_dim))
+                nn.init.normal_(positional_embedding, std=0.02)
+                
+                # Transformer layers
+                transformer_blocks = nn.ModuleList([
+                    SimpleTransformerBlock(
+                        embed_dim=token_embedding_dim, 
+                        num_heads=4,  # Multiple attention heads to capture different patterns
+                        mlp_ratio=2.0,
+                        dropout=0.1
+                    )
+                    for _ in range(2)  # Use 2 transformer layers
+                ])
+                
+                # Final projection
+                output_projection = nn.Linear(token_embedding_dim, self.vit_output_dim)
+                
+                # Create the full encoder as a custom module
+                class TransformerEncoder(nn.Module):
+                    def __init__(self):
+                        super().__init__()
+                        self.token_embedding = token_embedding
+                        self.positional_embedding = positional_embedding
+                        self.transformer_blocks = transformer_blocks
+                        self.output_projection = output_projection
+                        self.norm = nn.LayerNorm(token_embedding_dim)
+                    
+                    def forward(self, x):
+                        # x shape: [batch_size, seq_length]
+                        batch_size, seq_length = x.shape
+                        
+                        # Reshape to [batch_size, seq_length, 1]
+                        x = x.unsqueeze(-1)
+                        
+                        # Embed each token
+                        x = self.token_embedding(x)  # [batch_size, seq_length, embedding_dim]
+                        
+                        # Add positional embeddings
+                        x = x + self.positional_embedding
+                        
+                        # Apply transformer blocks
+                        for block in self.transformer_blocks:
+                            x = block(x)
+                        
+                        # Apply layer norm
+                        x = self.norm(x)
+                        
+                        # Global representation by averaging all token embeddings
+                        x = x.mean(dim=1)  # [batch_size, embedding_dim]
+                        
+                        # Project to output dimension
+                        x = self.output_projection(x)  # [batch_size, output_dim]
+                        
+                        return x
+                
+                self.state_encoder = TransformerEncoder().to(state.device)
+                
+                # Create optimizers
+                self.state_encoder_optim = torch.optim.Adam(
+                    self.state_encoder.parameters(),
+                    lr=self.critic_learning_rate,
+                    eps=1e-3
+                )
+                
+                # Update the critic optimizer
+                self.critic_optim = torch.optim.Adam(
+                    list(self.critic.parameters()) + list(self.state_encoder.parameters()),
+                    lr=self.critic_learning_rate, 
+                    eps=1e-3
+                )
+                
+                # Update saveables
+                self.saveables.update({
+                    "state_encoder": self.state_encoder,
+                    "state_encoder_optim": self.state_encoder_optim,
+                    "critic_optim": self.critic_optim,
+                })
+            
+            # Add batch dimension if needed
+            if len(state.shape) == 1:
+                state = state.unsqueeze(0)
         
-        # Normalize if needed
-        if state.max() > 1.0:
-            state = state / state.max()
-        
-        # Encode state
-        encoded_state = self.state_encoder(state)
-        return encoded_state
+        return self.state_encoder(state)
     
     def act(self, obs: np.ndarray, explore: bool):
         """Returns an action (should be called at every timestep)"""
-        # Convert observation to tensor and encode it
+        # Encode the state
         with torch.no_grad():
-            encoded_state = self._encode_state(obs)
-            action = self.actor(encoded_state)
+            encoded_obs = self._encode_state(obs)
+            action = self.actor(encoded_obs)
         
         # Convert to numpy
         action = action.cpu().numpy().flatten()
@@ -353,18 +419,19 @@ class DDPG_ViT(DDPG):
             noise = self.noise.sample().numpy()
             action = action + noise
         
-        # Clip action to be within action space bounds
+        # Clip to action space bounds
         action = np.clip(action, self.lower_action_bound, self.upper_action_bound)
         
         return action
     
     def update(self, batch):
-        """Update function for DDPG with vision transformer"""
+        """Update function for DDPG with enhanced state representation"""
         states, actions, next_states, rewards, dones = batch
         
         # Encode states and next states
         encoded_states = self._encode_state(states)
-        encoded_next_states = self._encode_state(next_states)
+        with torch.no_grad():
+            encoded_next_states = self._encode_state(next_states)
         
         # Update critic
         self.critic_optim.zero_grad()
@@ -385,7 +452,7 @@ class DDPG_ViT(DDPG):
         q_loss.backward()
         self.critic_optim.step()
         
-        # Update actor
+        # Update actor (detach encoded_states to avoid affecting encoder through policy gradient)
         self.policy_optim.zero_grad()
         
         # Get current actions according to policy
