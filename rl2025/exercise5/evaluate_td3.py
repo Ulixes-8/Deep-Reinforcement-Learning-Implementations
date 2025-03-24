@@ -5,14 +5,11 @@ from typing import List, Dict
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Import the TD3Ensemble agent and play_episode function
 from agents import TD3Ensemble
 from train_td3 import play_episode
 
-# Import constants (assuming these provide keys like "env", "eval_episodes", "episode_length", "batch_size")
 from rl2025.constants import EX4_RACETRACK_CONSTANTS as RACETRACK_CONSTANTS
 
-# Global settings and configuration
 RENDER = False
 RESULTS_DIR = "models"
 os.makedirs(RESULTS_DIR, exist_ok=True)

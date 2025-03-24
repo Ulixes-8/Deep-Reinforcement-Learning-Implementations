@@ -16,7 +16,6 @@ from rl2025.exercise3.replay import ReplayBuffer
 from rl2025.util.hparam_sweeping import generate_hparam_configs
 from rl2025.util.result_processing import Run
 
-# Import the agents (adjust the import path if needed)
 from agents import TD3Ensemble
 
 # Global settings

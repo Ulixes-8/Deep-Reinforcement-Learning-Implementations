@@ -31,6 +31,7 @@ def question_specs():
         "question2_2": ("multi_choice", ("a", "b")),
         "question2_3": ("multi_choice", ("a", "b")),
         "question2_4": ("short_answer", (100,)),
+        "question2_5": ("short_answer", (100,)),
         "question3_1": ("multi_choice", ("a", "b", "c")),
         "question3_2": ("multi_choice", ("a", "b", "c")),
         "question3_3": ("multi_choice", ("a", "b", "c")),

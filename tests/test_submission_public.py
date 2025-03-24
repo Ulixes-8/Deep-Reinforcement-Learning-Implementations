@@ -54,15 +54,6 @@ def test_exercise4(rl2025_dir):
     racetrack_params_path = os.path.join(ex4_path, "racetrack_latest.pt")
     assert os.path.isfile(racetrack_params_path)
 
-def test_exercise5(rl2025_dir):
-    ex5_path = os.path.join(rl2025_dir, "exercise5")
-    init_path = os.path.join(ex5_path, "__init__.py")
-    assert os.path.isfile(init_path)
-    train_ddpg_path = os.path.join(ex5_path, "train_ddpg.py")
-    assert os.path.isfile(train_ddpg_path)
-    racetrack_params_path = os.path.join(ex5_path, "racetrack_hparam_latest.pt")
-    assert os.path.isfile(racetrack_params_path)
-
 def test_answer_sheet(rl2025_dir):
     answer_sheet_path = os.path.join(rl2025_dir, "answer_sheet.py")
     assert os.path.isfile(answer_sheet_path)

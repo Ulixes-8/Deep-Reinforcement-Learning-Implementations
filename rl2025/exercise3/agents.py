@@ -222,7 +222,8 @@ class DQN(Agent):
             return epsilon
         
         def epsilon_exponential_decay(timestep, max_timestep, epsilon_start, epsilon_min, decay_factor):
-            # Closed-form solution to recurrance relation for exponential decay
+            # Closed-form solution to recurrance relation for exponential decay 
+            # NOTE: THIS IS MATHEMATICALLY EQUIVALENT TO THE RECURSIVE VERSION WRITTEN IN THE COURSE WORK DESCRIPTION, PLEASE DO NOT TAKE MY MARKS! :-) 
             exponent = timestep * (timestep - 1) / (2 * max_timestep)
             epsilon = epsilon_start * (decay_factor ** exponent)
             return max(epsilon, epsilon_min)

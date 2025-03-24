@@ -416,6 +416,6 @@ class TD3Ensemble(Agent):
         progress = timestep / max_timesteps
         self.volatility_threshold = max(0.05, 0.2 - 0.15 * progress)
         
-        # Optional: adjust noise parameters over time
+        # adjust noise parameters over time
         # self.target_noise = max(0.05, self.target_noise * (1 - 0.5 * progress))
         # self.noise_clip = max(0.1, self.noise_clip * (1 - 0.3 * progress))
