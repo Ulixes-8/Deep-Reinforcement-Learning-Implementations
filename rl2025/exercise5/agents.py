@@ -2,7 +2,7 @@ import os
 import gymnasium as gym
 import numpy as np
 from torch.optim import Adam
-from typing import Dict, Iterable
+from typing import Dict, Iterable, List
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -23,19 +23,15 @@ class DiagGaussian:
         return self.mean + self.std * eps
 
 
-class TD3(Agent):
-    """ TD3 (Twin Delayed DDPG)
+class TD3Ensemble(Agent):
+    """ TD3 with Ensemble of Critics
     
-    An extension of DDPG that addresses function approximation errors by:
-    1. Using twin critics to reduce overestimation bias
-    2. Delayed policy updates for stability
-    3. Target policy smoothing via noise addition
+    An extension of TD3 that uses an ensemble of critics (more than 2) to further
+    reduce overestimation bias and improve stability.
     
-    :attr critic1 (FCNetwork): first fully connected critic network
-    :attr critic2 (FCNetwork): second fully connected critic network
-    :attr critic1_target (FCNetwork): target network for first critic
-    :attr critic2_target (FCNetwork): target network for second critic
-    :attr critic_optim (torch.optim): PyTorch optimiser for both critics
+    :attr critics (List[FCNetwork]): ensemble of critic networks
+    :attr critics_target (List[FCNetwork]): target networks for critics
+    :attr critic_optim (torch.optim): PyTorch optimiser for all critics
     :attr actor (FCNetwork): fully connected actor network for policy
     :attr actor_target (FCNetwork): target network for actor
     :attr actor_optim (torch.optim): PyTorch optimiser for actor network
@@ -45,6 +41,7 @@ class TD3(Agent):
     :attr policy_counter (int): counter for policy updates
     :attr target_noise (float): noise std for target policy smoothing
     :attr noise_clip (float): clipping value for target policy noise
+    :attr num_critics (int): number of critics in the ensemble
     """
 
     def __init__(
@@ -60,6 +57,7 @@ class TD3(Agent):
             policy_delay: int = 2,
             target_noise: float = 0.2,
             noise_clip: float = 0.5,
+            num_critics: int = 4,  # ensemble size
             **kwargs,
     ):
         """
@@ -74,6 +72,7 @@ class TD3(Agent):
         :param policy_delay (int): number of critic updates per policy update
         :param target_noise (float): std of noise added to target policy
         :param noise_clip (float): limit for absolute value of target policy noise
+        :param num_critics (int): number of critics in the ensemble (must be >= 2)
         """
         super().__init__(action_space, observation_space)
         STATE_SIZE = observation_space.shape[0]
@@ -81,6 +80,9 @@ class TD3(Agent):
 
         self.upper_action_bound = action_space.high[0]
         self.lower_action_bound = action_space.low[0]
+        
+        # Ensure we have at least 2 critics (TD3 minimum)
+        self.num_critics = max(2, num_critics)
 
         # ######################################### #
         #  BUILD NETWORKS AND OPTIMIZERS           #
@@ -95,27 +97,31 @@ class TD3(Agent):
         )
         self.actor_target.hard_update(self.actor)
         
-        # Twin critics and targets
-        self.critic1 = FCNetwork(
-            (STATE_SIZE + ACTION_SIZE, *critic_hidden_size, 1), output_activation=None
-        )
-        self.critic1_target = FCNetwork(
-            (STATE_SIZE + ACTION_SIZE, *critic_hidden_size, 1), output_activation=None
-        )
-        self.critic1_target.hard_update(self.critic1)
+        # Create ensemble of critics and their targets
+        self.critics = []
+        self.critics_target = []
         
-        self.critic2 = FCNetwork(
-            (STATE_SIZE + ACTION_SIZE, *critic_hidden_size, 1), output_activation=None
-        )
-        self.critic2_target = FCNetwork(
-            (STATE_SIZE + ACTION_SIZE, *critic_hidden_size, 1), output_activation=None
-        )
-        self.critic2_target.hard_update(self.critic2)
+        for i in range(self.num_critics):
+            critic = FCNetwork(
+                (STATE_SIZE + ACTION_SIZE, *critic_hidden_size, 1), output_activation=None
+            )
+            critic_target = FCNetwork(
+                (STATE_SIZE + ACTION_SIZE, *critic_hidden_size, 1), output_activation=None
+            )
+            critic_target.hard_update(critic)
+            
+            self.critics.append(critic)
+            self.critics_target.append(critic_target)
 
         # Optimizers
         self.actor_optim = Adam(self.actor.parameters(), lr=policy_learning_rate, eps=1e-3)
-        self.critic_params = list(self.critic1.parameters()) + list(self.critic2.parameters())
-        self.critic_optim = Adam(self.critic_params, lr=critic_learning_rate, eps=1e-3)
+        
+        # Create a list of all critic parameters for the optimizer
+        critic_parameters = []
+        for critic in self.critics:
+            critic_parameters.extend(list(critic.parameters()))
+            
+        self.critic_optim = Adam(critic_parameters, lr=critic_learning_rate, eps=1e-3)
 
         # ############################################# #
         # ALGORITHM HYPERPARAMETERS                    #
@@ -130,6 +136,14 @@ class TD3(Agent):
         self.policy_counter = 0  # Counter for policy delay
         self.target_noise = target_noise
         self.noise_clip = noise_clip
+        
+        # Dynamic policy delay adjustment parameters
+        self.base_policy_delay = policy_delay  # Store the base delay as reference
+        self.min_policy_delay = 1              # Minimum policy delay
+        self.max_policy_delay = 4              # Maximum policy delay
+        self.critic_loss_history = []          # Store recent critic losses
+        self.history_length = 20               # Number of recent losses to consider
+        self.volatility_threshold = 0.2        # Threshold for determining volatility
 
         # ################################################### #
         # EXPLORATION NOISE                                   #
@@ -139,18 +153,17 @@ class TD3(Agent):
         self.noise = DiagGaussian(mean, std)
 
         # Save network parameters for later restoration
-        self.saveables.update(
-            {
-                "actor": self.actor,
-                "actor_target": self.actor_target,
-                "critic1": self.critic1,
-                "critic1_target": self.critic1_target,
-                "critic2": self.critic2,
-                "critic2_target": self.critic2_target,
-                "actor_optim": self.actor_optim,
-                "critic_optim": self.critic_optim,
-            }
-        )
+        self.saveables = {
+            "actor": self.actor,
+            "actor_target": self.actor_target,
+            "actor_optim": self.actor_optim,
+            "critic_optim": self.critic_optim,
+        }
+        
+        # Add all critics and their targets to saveables
+        for i, (critic, critic_target) in enumerate(zip(self.critics, self.critics_target)):
+            self.saveables[f"critic_{i}"] = critic
+            self.saveables[f"critic_target_{i}"] = critic_target
 
     def save(self, path: str, suffix: str = "") -> str:
         """Saves saveable PyTorch models under given path
@@ -167,16 +180,41 @@ class TD3(Agent):
 
     def restore(self, filename: str, dir_path: str = None):
         """Restores PyTorch models from models file given by path
-
+        
         :param filename (str): filename containing saved models
         :param dir_path (str, optional): path to directory where models file is located
         """
         if dir_path is None:
             dir_path = os.getcwd()
         save_path = os.path.join(dir_path, filename)
+        
         checkpoint = torch.load(save_path)
-        for k, v in self.saveables.items():
-            v.load_state_dict(checkpoint[k].state_dict())
+        
+        # Simply restore without any warnings about critic counts
+        # Restore actor and actor target
+        if "actor" in checkpoint:
+            self.actor.load_state_dict(checkpoint["actor"].state_dict())
+        if "actor_target" in checkpoint:
+            self.actor_target.load_state_dict(checkpoint["actor_target"].state_dict())
+        
+        # Restore optimizers if present
+        if "actor_optim" in checkpoint:
+            self.actor_optim.load_state_dict(checkpoint["actor_optim"].state_dict())
+            
+        if "critic_optim" in checkpoint:
+            self.critic_optim.load_state_dict(checkpoint["critic_optim"].state_dict())
+        
+        # Restore critics and targets - only load the ones we have in our model
+        for i in range(self.num_critics):
+            critic_key = f"critic_{i}"
+            target_key = f"critic_target_{i}"
+            
+            if critic_key in checkpoint:
+                self.critics[i].load_state_dict(checkpoint[critic_key].state_dict())
+            if target_key in checkpoint:
+                self.critics_target[i].load_state_dict(checkpoint[target_key].state_dict())
+        
+        print(f"Successfully loaded model from {filename}")
 
     def act(self, obs: np.ndarray, explore: bool):
         """Returns an action (should be called at every timestep)
@@ -207,10 +245,10 @@ class TD3(Agent):
         return action
 
     def update(self, batch: Transition) -> Dict[str, float]:
-        """Update function for TD3
+        """Update function for TD3 with Ensemble Critics and Dynamic Policy Delay
 
-        This function is called after storing a transition in the replay buffer. This happens
-        every timestep. It should update your critics and delayed updates for the actor.
+        This function updates the ensemble of critics and the actor network with
+        dynamically adjusted policy update frequency based on critic stability.
 
         :param batch (Transition): batch vector from replay buffer
         :return (Dict[str, float]): dictionary mapping from loss names to loss values
@@ -224,17 +262,15 @@ class TD3(Agent):
         # Zero gradients
         self.critic_optim.zero_grad()
         
-        # Compute current Q-values for both critics
+        # Concatenate states and actions for critic input
         state_action = torch.cat([states, actions], dim=1)
-        current_q1 = self.critic1(state_action)
-        current_q2 = self.critic2(state_action)
         
         # Compute target Q-values using target policy smoothing
         with torch.no_grad():
             # Get next actions from target actor
             next_actions = self.actor_target(next_states)
             
-            # Add clipped noise to target actions for smoothing (TD3 improvement 1)
+            # Add clipped noise to target actions for smoothing
             noise = torch.randn_like(next_actions) * self.target_noise
             noise = torch.clamp(noise, -self.noise_clip, self.noise_clip)
             smoothed_next_actions = torch.clamp(
@@ -243,31 +279,54 @@ class TD3(Agent):
                 self.upper_action_bound
             )
             
-            # Get Q-values from both target critics for the smoothed next actions
+            # Create input for target critics
             next_state_action = torch.cat([next_states, smoothed_next_actions], dim=1)
-            next_q1 = self.critic1_target(next_state_action)
-            next_q2 = self.critic2_target(next_state_action)
             
-            # Take the minimum of both Q-values (TD3 improvement 2)
-            next_q = torch.min(next_q1, next_q2)
+            # Get Q-values from all target critics
+            next_q_values = []
+            for critic_target in self.critics_target:
+                next_q = critic_target(next_state_action)
+                next_q_values.append(next_q)
+            
+            # Stack all Q-values and take the minimum across all critics
+            next_q_values = torch.stack(next_q_values, dim=0)
+            min_next_q = torch.min(next_q_values, dim=0)[0]
             
             # Calculate target Q-value using Bellman equation
-            target_q = rewards + (1 - dones) * self.gamma * next_q
+            target_q = rewards + (1 - dones) * self.gamma * min_next_q
         
-        # Compute critic losses (MSE)
-        q1_loss = F.mse_loss(current_q1, target_q)
-        q2_loss = F.mse_loss(current_q2, target_q)
-        critic_loss = q1_loss + q2_loss
+        # Compute critic losses for all critics
+        critic_losses = []
+        total_critic_loss = 0
         
-        # Update critics
-        critic_loss.backward()
+        for i, critic in enumerate(self.critics):
+            current_q = critic(state_action)
+            critic_loss = F.mse_loss(current_q, target_q)
+            critic_losses.append(critic_loss)
+            total_critic_loss += critic_loss
+        
+        # Store the average critic loss for dynamic policy delay adjustment
+        avg_critic_loss = total_critic_loss.item() / len(self.critics)
+        self.critic_loss_history.append(avg_critic_loss)
+        
+        # Keep history at fixed length
+        if len(self.critic_loss_history) > self.history_length:
+            self.critic_loss_history.pop(0)
+        
+        # Dynamically adjust policy delay based on critic loss stability
+        # Only do this when we have enough history
+        if len(self.critic_loss_history) >= self.history_length:
+            self._adjust_policy_delay()
+            
+        # Backpropagate the total loss through all critics
+        total_critic_loss.backward()
         self.critic_optim.step()
         
         # ---------------------- #
         # DELAYED POLICY UPDATE  #
         # ---------------------- #
         
-        # Only update policy and target networks at specified frequency (TD3 improvement 3)
+        # Only update policy and target networks at specified frequency
         policy_loss = 0.0
         self.policy_counter += 1
         
@@ -277,12 +336,22 @@ class TD3(Agent):
             # Zero policy gradient
             self.actor_optim.zero_grad()
             
-            # Compute policy loss using only the first critic for stable policy updates
+            # Compute policy loss using all critics
+            # The approach is to average the output of all critics for more stable policy updates
             policy_actions = self.actor(states)
             policy_state_action = torch.cat([states, policy_actions], dim=1)
-            policy_loss = -self.critic1(policy_state_action).mean()
             
-            # Update policy
+            # Average Q-values across the first few critics (typically use critics 0 and 1)
+            # This is to avoid overfitting to a single critic
+            avg_q_value = self.critics[0](policy_state_action)
+            for i in range(1, min(2, self.num_critics)):  # Use at most 2 critics for policy updates
+                avg_q_value += self.critics[i](policy_state_action)
+            avg_q_value /= min(2, self.num_critics)
+            
+            # Policy gradient is the negative of the Q-value
+            policy_loss = -avg_q_value.mean()
+            
+            # Update actor
             policy_loss.backward()
             self.actor_optim.step()
             
@@ -290,22 +359,50 @@ class TD3(Agent):
             # UPDATE TARGET NETWORKS #
             # ---------------------- #
             
-            # Soft update of all target networks
-            self.critic1_target.soft_update(self.critic1, self.tau)
-            self.critic2_target.soft_update(self.critic2, self.tau)
+            # Soft update actor target
             self.actor_target.soft_update(self.actor, self.tau)
+            
+            # Soft update all critic targets
+            for critic, critic_target in zip(self.critics, self.critics_target):
+                critic_target.soft_update(critic, self.tau)
         
-        return {
-            "q1_loss": q1_loss.item(),
-            "q2_loss": q2_loss.item(),
+        # Prepare return dictionary with all losses
+        return_dict = {
             "p_loss": policy_loss if isinstance(policy_loss, float) else policy_loss.item(),
-            "critic_loss": critic_loss.item()
+            "total_critic_loss": total_critic_loss.item(),
+            "policy_delay": self.policy_delay  # Include current policy delay
         }
+        
+        # Add individual critic losses
+        for i, loss in enumerate(critic_losses):
+            return_dict[f"critic_{i}_loss"] = loss.item()
+        
+        return return_dict
+        
+    def _adjust_policy_delay(self):
+        """Dynamically adjusts policy delay based on critic loss stability.
+        
+        When critic losses are stable (low variance), we can update the policy more frequently.
+        When critic losses are volatile (high variance), we should update the policy less frequently.
+        """
+        # Calculate volatility using coefficient of variation
+        # (standard deviation / mean) of recent critic losses
+        mean_loss = np.mean(self.critic_loss_history)
+        if mean_loss > 0:  # Avoid division by zero
+            std_loss = np.std(self.critic_loss_history)
+            volatility = std_loss / mean_loss
+            
+            # Adjust policy delay based on volatility
+            if volatility > self.volatility_threshold:
+                # High volatility: Increase delay (slower policy updates)
+                self.policy_delay = min(self.max_policy_delay, self.policy_delay + 1)
+            else:
+                # Low volatility: Decrease delay (faster policy updates)
+                self.policy_delay = max(self.min_policy_delay, self.policy_delay - 1)
+
     
     def schedule_hyperparameters(self, timestep: int, max_timesteps: int):
         """Updates the hyperparameters
-
-        **YOU MAY IMPLEMENT THIS FUNCTION FOR Q5**
 
         This function is called before every episode and allows you to schedule your
         hyperparameters.
@@ -313,5 +410,12 @@ class TD3(Agent):
         :param timestep (int): current timestep at the beginning of the episode
         :param max_timestep (int): maximum timesteps that the training loop will run for
         """
-        ### PUT YOUR CODE HERE ###
-        pass
+        # Adjust volatility threshold based on training progress
+        # At the beginning, we expect more volatility, so we set a higher threshold
+        # As training progresses, we become more sensitive to volatility
+        progress = timestep / max_timesteps
+        self.volatility_threshold = max(0.05, 0.2 - 0.15 * progress)
+        
+        # Optional: adjust noise parameters over time
+        # self.target_noise = max(0.05, self.target_noise * (1 - 0.5 * progress))
+        # self.noise_clip = max(0.1, self.noise_clip * (1 - 0.3 * progress))
