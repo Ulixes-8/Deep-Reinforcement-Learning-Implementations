@@ -39,52 +39,84 @@ The code is organized into five main exercises, each exploring different aspects
 - **Performance**: Achieved exceptional performance in the Highway-v0 environment with a mean max return of 996.41.
 - **Run**: Execute `train_td3.py` to train the agent and `evaluate_td3.py` to evaluate its performance.
 
+## Environment Setup
+
+To get started with this codebase, follow these steps:
+
+1. **Install Anaconda**
+   - Navigate to the [Anaconda download page](https://www.anaconda.com/products/distribution) and follow the installation instructions for your operating system.
+   - Anaconda (sometimes shortened to "conda") supports Linux, MacOS, and Windows.
+
+2. **Create a conda environment**
+   ```bash
+   # Create a new conda environment with Python 3.7
+   conda create -n rl_course python=3.7
+   
+   # Activate the conda environment
+   conda activate rl_course
+   ```
+
+3. **Download and install the codebase**
+   ```bash
+   # After unzipping rl2025-coursework.zip, navigate to the coursework folder
+   cd rl2025-coursework
+   
+   # Install the required packages using pip
+   pip install -e .
+   ```
+   This will install all the required dependencies specified in the `setup.py` file.
+
 ## Running the Code
 
-### Environment Setup
-```bash
-# Create and activate a virtual environment
-python -m venv rl_env
-source rl_env/bin/activate  # On Windows: rl_env\Scripts\activate
-
-# Install dependencies
-pip install numpy gymnasium torch matplotlib tqdm
-```
+Navigate to the appropriate directories before running each file:
 
 ### Exercise 1: MDP Solvers
 ```bash
-python -m rl2025.exercise1.mdp_solver
+# Navigate to the exercise1 directory
+cd rl2025/exercise1
+
+# Run the MDP solver
+python mdp_solver.py
 ```
 
 ### Exercise 2: Model-Free RL
 ```bash
+# Navigate to the exercise2 directory
+cd rl2025/exercise2
+
 # Run Q-Learning
-python -m rl2025.exercise2.train_q_learning
+python train_q_learning.py
 
 # Run Monte Carlo Control
-python -m rl2025.exercise2.train_monte_carlo
+python train_monte_carlo.py
 ```
 
 ### Exercise 3: Deep Q-Learning
 ```bash
+# Navigate to the exercise3 directory
+cd rl2025/exercise3
+
 # Run DQN
-python -m rl2025.exercise3.train_dqn
+python train_dqn.py
 
 # Run DiscreteRL
-python -m rl2025.exercise3.train_discreterl
+python train_discreterl.py
 
 # Evaluate trained agents
-python -m rl2025.exercise3.evaluate_dqn
-python -m rl2025.exercise3.evaluate_discreterl
+python evaluate_dqn.py
+python evaluate_discreterl.py
 ```
 
 ### Exercise 4: DDPG
 ```bash
+# Navigate to the exercise4 directory
+cd rl2025/exercise4
+
 # Train DDPG
-python -m rl2025.exercise4.train_ddpg
+python train_ddpg.py
 
 # Evaluate DDPG
-python -m rl2025.exercise4.evaluate_ddpg
+python evaluate_ddpg.py
 ```
 
 ### Exercise 5: TD3Ensemble (Novel Approach)
